@@ -1,31 +1,27 @@
 Param
-     (
-         [Parameter (Mandatory= $false)][String] $ResourceGroup,
-         [Parameter (Mandatory= $false)][String] $StorageAccountName
-     )
-#$srt = Get-AzKeyVaultSecret -VaultName 'keyfs' -Name 'test'
-#$azureAplicationId ='122d2e97-f588-4ec5-ad5d-91ea8f571aa2'
-#$azureTenantId= '6df164b8-1fa9-4ecc-b708-ef519900caee'
-#$azurePassword = ConvertTo-SecureString $srt -AsPlainText -Force
-#$psCred = New-Object System.Management.Automation.PSCredential($azureAplicationId , $azurePassword)
-#Connect-AzAccount -Credential $psCred -TenantId $azureTenantId -ServicePrincipal
+(
+[Parameter (Mandatory= $false)][String] $ResourceGroup,
+[Parameter (Mandatory= $false)][String] $Resource
+)
+
 $ConnectionName = 'AzureRunAsConnection'
 $ServicePrincipalConnection = Get-AutomationConnection -Name $ConnectionName
+$ipAdress =@("0.0.0.0/32","148.168.216.0/24","148.168.40.0/24","148.168.96.0/24","204.114.176.0/26","170.116.64.0/24","204.114.248.0/26","204.114.196.0/24","168.224.160.0/24")
 Connect-AzAccount `
-       -ServicePrincipal `
-        -TenantId $ServicePrincipalConnection.TenantId `
-        -ApplicationId $ServicePrincipalConnection.ApplicationId `
-        -CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint
-$storageAccount = Set-AzStorageAccount -ResourceGroupName $ResourceGroup `
-    -Name $StorageAccountName `
-    -AssignIdentity
-Set-AzKeyVaultAccessPolicy `
-    -VaultName "keyfs" `
-    -BypassObjectIdValidation `
-    -ObjectId $storageAccount.Identity.PrincipalId `
-    -PermissionsToKeys wrapkey,unwrapkey,get
-Set-AzStorageAccount -ResourceGroupName $ResourceGroup `
-    -AccountName $StorageAccountName `
-    -KeyvaultEncryption `
-    -KeyName "abc" `
-    -KeyVaultUri "https://keyfs.vault.azure.net/"
+-ServicePrincipal `
+-TenantId $ServicePrincipalConnection.TenantId `
+-ApplicationId $ServicePrincipalConnection.ApplicationId `
+-CertificateThumbprint $ServicePrincipalConnection.CertificateThumbprint
+$Result=Get-AzWebAppAccessRestrictionConfig -ResourceGroupName $ResourceGroup -Name $Resource
+if($Result.MainSiteAccessRestrictions.RuleName -eq "IpRule")
+{
+Write-Output 'No need to add'
+}
+else
+{
+  for ($i=0;$i -lt 9; $i++) {
+    $p = 100+$i
+     Add-AzWebAppAccessRestrictionRule -ResourceGroupName $ResourceGroup -WebAppName $Resource -Name IpRule-$i -Priority $p -Action Allow -IpAddress $ipAdress[$i]
+    }
+Set-AzWebApp -ResourceGroupName $ResourceGroup -Name $Resource -HttpsOnly $true
+}
